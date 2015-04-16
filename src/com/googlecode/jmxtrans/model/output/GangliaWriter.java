@@ -19,6 +19,7 @@ import java.io.IOException;
 import org.apache.commons.lang.StringUtils;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.math.BigDecimal;
 
 import static info.ganglia.gmetric4j.gmetric.GMetric.UDPAddressingMode;
 
@@ -57,6 +58,7 @@ public class GangliaWriter extends BaseOutputWriter {
     public static final int DEFAULT_DMAX = 0;
     public static final int DEFAULT_TMAX = 60;
     public static final String DEFAULT_GROUP_NAME = "JMX";
+    public static final BigDecimal GANGLIA_MIN_DOUBLE = new BigDecimal("1E-308");
 
     /* Settings run-time values. */
     protected String host = DEFAULT_HOST;
@@ -140,9 +142,11 @@ public class GangliaWriter extends BaseOutputWriter {
             if (result.getValues() != null) {
                 for (final Map.Entry<String, Object> resultValue : result.getValues().entrySet()) {
                     final String name = JmxUtils.getKeyString(query, result, resultValue, getTypeNames());
-                    final String value = resultValue.getValue().toString();
+                    BigDecimal value = new BigDecimal(resultValue.getValue().toString());
+                    String strValue = value.compareTo(GANGLIA_MIN_DOUBLE) <= 0 ? "0" : value.toString();
+                    
                     GMetricType dataType = getType(resultValue.getValue());
-                    log.debug("Sending Ganglia metric {}={} [type={}]", new Object[]{name, value, dataType});
+                    log.debug("Sending Ganglia metric {}={} [type={}]", new Object[]{name, strValue, dataType});
                     new GMetric(
                             host,
                             port,
@@ -153,7 +157,7 @@ public class GangliaWriter extends BaseOutputWriter {
                             spoofedHostName
                     ).announce(
                             name,
-                            value,
+                            strValue,
                             dataType,
                             units,
                             slope,
