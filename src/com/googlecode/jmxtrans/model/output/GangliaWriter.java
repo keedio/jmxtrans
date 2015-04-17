@@ -9,6 +9,8 @@ import com.googlecode.jmxtrans.model.Result;
 import com.googlecode.jmxtrans.model.Server;
 import com.googlecode.jmxtrans.model.ValidationException;
 import com.googlecode.jmxtrans.model.naming.KeyUtils;
+import com.googlecode.jmxtrans.model.results.CPrecisionValueTransformer;
+import com.googlecode.jmxtrans.model.results.ValueTransformer;
 import info.ganglia.gmetric4j.gmetric.GMetric;
 import info.ganglia.gmetric4j.gmetric.GMetricSlope;
 import info.ganglia.gmetric4j.gmetric.GMetricType;
@@ -23,8 +25,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
-import java.math.BigDecimal;
 
 import static info.ganglia.gmetric4j.gmetric.GMetric.UDPAddressingMode;
 
@@ -64,7 +64,6 @@ public class GangliaWriter extends BaseOutputWriter {
 	public static final int DEFAULT_DMAX = 0;
 	public static final int DEFAULT_TMAX = 60;
 	public static final String DEFAULT_GROUP_NAME = "JMX";
-	public static final BigDecimal GANGLIA_MIN_DOUBLE = new BigDecimal("1E-308");
 
 	/* Settings run-time values. */
 	private final String host;
@@ -79,6 +78,8 @@ public class GangliaWriter extends BaseOutputWriter {
 	private final String groupName;
 
 	private String spoofedHostName = null;
+
+	private final ValueTransformer valueTransformer = new CPrecisionValueTransformer();
 
 	@JsonCreator
 	public GangliaWriter(
@@ -169,14 +170,13 @@ public class GangliaWriter extends BaseOutputWriter {
 			if (result.getValues() != null) {
 				for (final Map.Entry<String, Object> resultValue : result.getValues().entrySet()) {
 					final String name = KeyUtils.getKeyString(query, result, resultValue, getTypeNames());
-					
-					BigDecimal value = new BigDecimal(resultValue.getValue().toString());
-					String strValue = value.compareTo(GANGLIA_MIN_DOUBLE) <= 0 ? "0" : value.toString();
+
+					Object transformedValue = valueTransformer.apply(resultValue.getValue());
 
 					GMetricType dataType = getType(resultValue.getValue());
-					log.debug("Sending Ganglia metric {}={} [type={}]", name, strValue, dataType);
+					log.debug("Sending Ganglia metric {}={} [type={}]", name, transformedValue, dataType);
 					new GMetric(host, port, addressingMode, ttl, v31, null, spoofedHostName)
-							.announce(name, strValue, dataType, units, slope, tmax, dmax, groupName);
+							.announce(name, transformedValue.toString(), dataType, units, slope, tmax, dmax, groupName);
 				}
 			}
 		}
